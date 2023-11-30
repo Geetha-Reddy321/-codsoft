@@ -1,0 +1,72 @@
+import pandas as pd
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import PorterStemmer
+
+# Sample dataset of books
+books_data = {
+    'Title': ['One Indian GIRL', 'IT ENDS WITH US', 'IT STARTS WITH US', 'IT ENDS WITH US', 'A SUBTLE ART OF NOT GIVING A FUCK'],
+    'Description': ['This is the first book about a topic.',
+                    'The second book has a different subject.',
+                    'Book number three covers an interesting theme.',
+                    'A fourth book with a unique storyline.',
+                    'Book 5 is the latest addition to the series.'],
+}
+
+# Create a DataFrame from the sample data
+books_df = pd.DataFrame(books_data)
+
+# Download NLTK resources
+import nltk
+nltk.download('stopwords')
+nltk.download('punkt')
+
+# Function to preprocess and get book recommendations based on content
+def get_book_recommendations(book_title, num_recommendations=5):
+    # Preprocess the book descriptions
+    stop_words = set(stopwords.words('english'))
+    ps = PorterStemmer()
+    
+    def preprocess_text(text):
+        words = word_tokenize(text.lower())
+        filtered_words = [ps.stem(word) for word in words if word.isalnum() and word not in stop_words]
+        return ' '.join(filtered_words)
+
+    books_df['ProcessedDescription'] = books_df['Description'].apply(preprocess_text)
+
+    # Compute the cosine similarity between book descriptions
+    def cosine_similarity(a, b):
+        dot_product = sum(i * j for i, j in zip(a, b))
+        norm_a = sum(i ** 2 for i in a) ** 0.5
+        norm_b = sum(i ** 2 for i in b) ** 0.5
+        return dot_product / (norm_a * norm_b) if norm_a * norm_b != 0 else 0
+
+    # Get the index of the requested book
+    book_index = books_df.index[books_df['Title'] == book_title].tolist()[0]
+
+    # Calculate cosine similarity scores
+    similarity_scores = []
+    for index, row in books_df.iterrows():
+        if index != book_index:
+            similarity = cosine_similarity(
+                word_tokenize(books_df['ProcessedDescription'].iloc[book_index]),
+                word_tokenize(row['ProcessedDescription'])
+            )
+            similarity_scores.append((index, similarity))
+
+    # Sort the books based on similarity scores
+    similarity_scores = sorted(similarity_scores, key=lambda x: x[1], reverse=True)
+
+    # Get the indices of the top N similar books
+    top_indices = [x[0] for x in similarity_scores[:num_recommendations]]
+
+    # Return the titles of recommended books
+    recommended_books = books_df['Title'].iloc[top_indices].tolist()
+    return recommended_books
+
+# Example: Get book recommendations for 'One Indian GIRL'
+book_title = 'One Indian GIRL'
+recommendations = get_book_recommendations(book_title)
+print(f"Top 5 book recommendations for '{book_title}':\n")
+for book in recommendations:
+    print(book)
